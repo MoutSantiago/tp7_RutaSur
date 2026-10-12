@@ -16,7 +16,7 @@ La especificación completa está en [`docs/spec.md`](docs/spec.md).
 ## Estructura del monorepo
 
 ```
-packages/shared         Utilidades compartidas (esquemas de eventos, constantes, lógica pura)
+packages/shared         Utilidades compartidas (ver abajo)
 services/simulador      Genera envíos, promesas y cambios de estado
 services/proyector      Mantiene las vistas de lectura en MongoDB
 services/notificaciones Registra avisos al destinatario ante fallos y alertas
@@ -86,6 +86,22 @@ Ambos aceptan un argumento opcional para filtrar por topic o por grupo.
 | `npm run typecheck` | `tsc --noEmit` con `checkJs` sobre todo el repo |
 | `npm test`          | Tests (`node:test`) de todos los workspaces     |
 | `npm run check`     | Los tres anteriores, en orden                   |
+
+## Paquete `packages/shared`
+
+| Módulo | Qué provee |
+| :--- | :--- |
+| `constantes.js` | Topics, grupos de consumidores, estados, motivos, prioridades, reglas de SLA |
+| `eventos/esquemas.js` | Esquemas JSON por topic y `validarEvento` (Ajv) |
+| `eventos/fabrica.js` | Factorías `crearEvento*` que validan antes de devolver el evento |
+| `eventos/tipos.js` | Typedefs JSDoc de todos los eventos |
+| `kafka/productor.js` | Productor Kafka con clave `shipmentId` |
+| `kafka/consumidor.js` | Consumidor con commit manual + procesador puro: valida esquema, envía inválidos a la DLQ con motivo y continúa, descarta duplicados (idempotencia) y loguea `eventId`/partición/offset |
+| `mongo/conexion.js` | Conexión a MongoDB con ping de verificación |
+| `mongo/idempotencia.js` | Índices de `eventos_procesados` (único por consumidor+eventId, TTL 7 días) y `crearMarcadorIdempotencia` |
+| `config.js` | Configuración por variables de entorno validada al arrancar (`KAFKA_BROKERS`, `MONGO_URI`, `MONGO_DB`, `LOG_NIVEL`) |
+| `logger.js` | Logger JSON estructurado con loggers hijos por contexto |
+| `apagado.js` | Apagado ordenado ante SIGTERM/SIGINT con pasos de limpieza |
 
 ## Convenciones
 

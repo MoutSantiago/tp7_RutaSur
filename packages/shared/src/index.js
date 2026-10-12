@@ -1,14 +1,19 @@
 /**
- * Utilidades compartidas de RutaSur (esquemas de eventos, constantes, lógica pura).
- *
- * Punto de entrada del paquete. Por ahora es un placeholder de andamiaje;
- * la lógica de negocio se implementa en pasos posteriores.
+ * Punto de entrada del paquete compartido de RutaSur.
+ * Reexporta constantes, esquemas, factorías de eventos, clientes Kafka y
+ * helpers de MongoDB, configuración, logging y apagado ordenado.
  */
 
-/**
- * Versión actual del paquete.
- * @type {string}
- * @example
- * console.log(VERSION); // '0.1.0'
- */
+export * from './constantes.js';
+export * from './eventos/esquemas.js';
+export * from './eventos/fabrica.js';
+export * from './kafka/productor.js';
+export * from './kafka/consumidor.js';
+export * from './mongo/conexion.js';
+export * from './mongo/idempotencia.js';
+export * from './config.js';
+export * from './logger.js';
+export * from './apagado.js';
+
+/** @readonly versión actual del paquete. */
 export const VERSION = '0.1.0';

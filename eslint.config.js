@@ -18,6 +18,16 @@ export default [
     languageOptions: {
       ecmaVersion: 'latest',
       sourceType: 'module',
+      globals: {
+        console: 'readonly',
+        process: 'readonly',
+        setTimeout: 'readonly',
+        clearTimeout: 'readonly',
+        setInterval: 'readonly',
+        clearInterval: 'readonly',
+        Buffer: 'readonly',
+        URL: 'readonly',
+      },
     },
     rules: {
       'jsdoc/require-jsdoc': [
