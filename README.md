@@ -30,22 +30,62 @@ docs/                   Especificación y registro de decisiones
 ## Requisitos
 
 - Node.js 20 (ver `.nvmrc`; con `nvm`: `nvm use`).
+- Docker con Docker Compose v2.
 
 ## Puesta en marcha
 
 ```bash
 npm install
+npm run up      # levanta Kafka (KRaft) + MongoDB (replica set) y crea los topics
 npm run check   # lint + typecheck + tests
+npm run down    # detiene el entorno y borra los volúmenes (datos incluidos)
 ```
+
+## Infraestructura local (`docker-compose.yml`)
+
+- **Kafka** en modo KRaft (un solo broker, sin ZooKeeper):
+  - `localhost:9092` para conexiones de servicios corriendo fuera de Docker.
+  - `kafka:29092` para conexiones entre contenedores.
+- **MongoDB 7** como replica set de un nodo (`rs0`), necesario para los change
+  streams. El servicio `mongodb-init-rs` ejecuta `rs.initiate` automáticamente.
+  Conexión: `mongodb://localhost:27017/?replicaSet=rs0&directConnection=true`.
+- **`kafka-init-topics`** crea los 6 topics del catálogo al arrancar
+  (idempotente con `--if-not-exists`):
+
+  | Topic | Particiones | Retención / política |
+  | :--- | :--- | :--- |
+  | `envios.estados` | 3 | 30 días |
+  | `envios.promesas` | 3 | compactado |
+  | `envios.reprogramaciones` | 3 | 30 días |
+  | `alertas.sla` | 3 | 7 días |
+  | `notificaciones.enviadas` | 3 | 7 días |
+  | `envios.estados.dlq` | 3 | 30 días |
+
+  La clave de partición es siempre `shipmentId` (la aplican los productores al
+  publicar).
+
+Los datos persisten en los volúmenes `kafka-data` y `mongo-data` (`npm run down`
+los elimina).
+
+### Scripts utilitarios
+
+| Script             | Qué hace                                                        |
+| :----------------- | :-------------------------------------------------------------- |
+| `scripts/topics.sh` | Lista los topics con particiones, retención y política          |
+| `scripts/lag.sh`    | Muestra el lag de cada grupo de consumidores                    |
+
+Ambos aceptan un argumento opcional para filtrar por topic o por grupo.
 
 ## Scripts raíz
 
-| Comando              | Qué hace                                        |
-| :------------------- | :---------------------------------------------- |
-| `npm run lint`       | ESLint (exige JSDoc en clases y funciones)      |
-| `npm run typecheck`  | `tsc --noEmit` con `checkJs` sobre todo el repo |
-| `npm test`           | Tests (`node:test`) de todos los workspaces     |
-| `npm run check`      | Los tres anteriores, en orden                   |
+| Comando             | Qué hace                                        |
+| :------------------ | :---------------------------------------------- |
+| `npm run up`        | Levanta el entorno Docker y crea los topics     |
+| `npm run down`      | Detiene el entorno y borra volúmenes            |
+| `npm run lint`      | ESLint (exige JSDoc en clases y funciones)      |
+| `npm run typecheck` | `tsc --noEmit` con `checkJs` sobre todo el repo |
+| `npm test`          | Tests (`node:test`) de todos los workspaces     |
+| `npm run check`     | Los tres anteriores, en orden                   |
 
 ## Convenciones
 

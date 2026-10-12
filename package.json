@@ -18,6 +18,8 @@
     "apps/web"
   ],
   "scripts": {
+    "up": "docker compose up -d && docker compose wait kafka-init-topics mongodb-init-rs && docker compose logs --tail=20 kafka-init-topics mongodb-init-rs",
+    "down": "docker compose down -v",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
     "test": "npm test --workspaces --if-present",

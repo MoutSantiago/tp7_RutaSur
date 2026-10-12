@@ -1,0 +1,99 @@
+name: rutasur
+
+services:
+  kafka:
+    image: apache/kafka:3.9.0
+    container_name: rutasur-kafka
+    hostname: kafka
+    ports:
+      - '9092:9092' # acceso desde servicios locales (fuera de Docker)
+    environment:
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_LISTENERS: PLAINTEXT://kafka:29092,CONTROLLER://kafka:29093,HOST://0.0.0.0:9092
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:29092,HOST://localhost:9092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,CONTROLLER:PLAINTEXT,HOST:PLAINTEXT
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:29093
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+      KAFKA_NUM_PARTITIONS: 3
+      CLUSTER_ID: rutasur-kraft-cluster-0001
+    volumes:
+      - kafka-data:/var/lib/kafka/data
+    healthcheck:
+      test: ['CMD-SHELL', '/opt/kafka/bin/kafka-broker-api-versions.sh --bootstrap-server kafka:29092 > /dev/null 2>&1']
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+
+  kafka-init-topics:
+    image: apache/kafka:3.9.0
+    container_name: rutasur-kafka-init-topics
+    depends_on:
+      kafka:
+        condition: service_healthy
+    entrypoint: /bin/bash -e -c
+    command:
+      - |
+        B="/opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:29092"
+        DIA=86400000
+        $$B --create --if-not-exists --topic envios.estados            --partitions 3 --replication-factor 1 --config retention.ms=$$((30*DIA))
+        $$B --create --if-not-exists --topic envios.promesas          --partitions 3 --replication-factor 1 --config cleanup.policy=compact
+        $$B --create --if-not-exists --topic envios.reprogramaciones  --partitions 3 --replication-factor 1 --config retention.ms=$$((30*DIA))
+        $$B --create --if-not-exists --topic alertas.sla              --partitions 3 --replication-factor 1 --config retention.ms=$$((7*DIA))
+        $$B --create --if-not-exists --topic notificaciones.enviadas  --partitions 3 --replication-factor 1 --config retention.ms=$$((7*DIA))
+        $$B --create --if-not-exists --topic envios.estados.dlq       --partitions 3 --replication-factor 1 --config retention.ms=$$((30*DIA))
+        echo 'Topics creados:'
+        $$B --list
+
+  mongodb:
+    image: mongo:7
+    container_name: rutasur-mongodb
+    command: ['mongod', '--replSet', 'rs0', '--bind_ip_all']
+    ports:
+      - '27017:27017'
+    volumes:
+      - mongo-data:/data/db
+    healthcheck:
+      test:
+        [
+          'CMD-SHELL',
+          "mongosh --quiet --eval 'try { rs.status().ok } catch (e) { 0 }' | grep 1 > /dev/null",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+
+  mongodb-init-rs:
+    image: mongo:7
+    container_name: rutasur-mongodb-init-rs
+    depends_on:
+      mongodb:
+        condition: service_started
+    entrypoint: /bin/bash -e -c
+    command:
+      - |
+        until mongosh --host mongodb:27017 --quiet --eval 'db.runCommand({ ping: 1 }).ok' | grep 1 > /dev/null; do
+          echo 'Esperando a que mongod responda...'; sleep 2
+        done
+        ESTADO=$$(mongosh --host mongodb:27017 --quiet --eval 'try { rs.status().myState } catch (e) { 0 }')
+        if [ "$$ESTADO" != "1" ]; then
+          echo 'Iniciando replica set rs0...'
+          mongosh --host mongodb:27017 --quiet --eval '
+            rs.initiate({ _id: "rs0", members: [{ _id: 0, host: "mongodb:27017" }] })'
+        else
+          echo 'Replica set ya iniciado.'
+        fi
+        until mongosh --host mongodb:27017 --quiet --eval 'rs.status().myState' | grep 1 > /dev/null; do
+          echo 'Esperando elección del primario...'; sleep 2
+        done
+        echo 'Replica set rs0 listo.'
+
+volumes:
+  kafka-data:
+  mongo-data:
