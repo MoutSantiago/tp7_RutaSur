@@ -1,0 +1,14 @@
+{
+  "name": "@rutasur/simulador",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Simulador de envíos de RutaSur: genera eventos de origen en Kafka",
+  "main": "src/index.js",
+  "scripts": {
+    "test": "node --test test/*.test.js"
+  },
+  "dependencies": {
+    "@rutasur/shared": "0.1.0"
+  }
+}

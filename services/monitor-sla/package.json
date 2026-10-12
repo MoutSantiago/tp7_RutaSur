@@ -1,0 +1,14 @@
+{
+  "name": "@rutasur/monitor-sla",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Monitor de SLA de RutaSur: detecta envíos en riesgo y emite alertas",
+  "main": "src/index.js",
+  "scripts": {
+    "test": "node --test test/*.test.js"
+  },
+  "dependencies": {
+    "@rutasur/shared": "0.1.0"
+  }
+}

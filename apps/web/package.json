@@ -1,0 +1,6 @@
+{
+  "name": "@rutasur/web",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Interfaz web de RutaSur (Next.js). Se implementa en un paso posterior."
+}

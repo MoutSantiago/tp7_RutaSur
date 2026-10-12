@@ -1,0 +1,14 @@
+{
+  "name": "@rutasur/analitica",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Servicio de analítica de RutaSur: agregados de metricas_diarias",
+  "main": "src/index.js",
+  "scripts": {
+    "test": "node --test test/*.test.js"
+  },
+  "dependencies": {
+    "@rutasur/shared": "0.1.0"
+  }
+}

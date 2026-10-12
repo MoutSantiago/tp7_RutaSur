@@ -1,0 +1,11 @@
+{
+  "name": "@rutasur/shared",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Utilidades compartidas de RutaSur: eventos, validación de esquema y constantes",
+  "main": "src/index.js",
+  "scripts": {
+    "test": "node --test test/*.test.js"
+  }
+}
