@@ -31,7 +31,7 @@
 export async function crearProductor({ brokers, clientId, logger, kafka }) {
   const kafkaBase =
     kafka ??
-    new (await import('kafkajs')).Kafka({ clientId, brokers, enforceRequestTimeout: true });
+    new (await import('kafkajs')).Kafka({ clientId, brokers });
   const productorKafka = kafkaBase.producer({ allowAutoTopicCreation: false });
 
   await productorKafka.connect();

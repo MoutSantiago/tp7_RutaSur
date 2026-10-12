@@ -6,6 +6,7 @@
   "description": "Simulador de envíos de RutaSur: genera eventos de origen en Kafka",
   "main": "src/index.js",
   "scripts": {
+    "start": "node src/index.js",
     "test": "node --test test/*.test.js"
   },
   "dependencies": {

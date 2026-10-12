@@ -103,6 +103,32 @@ Ambos aceptan un argumento opcional para filtrar por topic o por grupo.
 | `logger.js` | Logger JSON estructurado con loggers hijos por contexto |
 | `apagado.js` | Apagado ordenado ante SIGTERM/SIGINT con pasos de limpieza |
 
+## Servicio `simulador`
+
+Genera eventos de origen en Kafka según la especificación. Requiere el entorno levantado (`npm run up`).
+
+```bash
+npm start -w services/simulador
+```
+
+Parámetros por variables de entorno (valores por defecto de la especificación):
+
+| Variable | Default | Descripción |
+| :--- | :--- | :--- |
+| `SIM_ENVIOS_POR_MINUTO` | 20 | Envíos nuevos por minuto real |
+| `SIM_FACTOR_ACELERACION` | 120 | 1 h simulada = 30 s reales; el tiempo simulado viaja en `ocurridoEn` |
+| `SIM_SEMILLA` | 42 | Semilla del PRNG (mulberry32): misma semilla = misma corrida exacta |
+| `SIM_ENVIOS_TOTAL` | 0 | 0 = flujo infinito; N = genera N envíos y deja de crear nuevos |
+| `SIM_FALLO_NORTE / _CENTRO / _SUR` | 0.05 / 0.15 / 0.30 | Tasa de fallo por intento por zona |
+| `SIM_MOTIVO_AUSENTE / _DIRECCION / _RECHAZADO / _ZONA` | 0.60 / 0.20 / 0.15 / 0.05 | Distribución de motivos de fallo |
+| `SIM_DEMORA_HUB` | 0.10 | Probabilidad de demora en el hub |
+| `SIM_DUPLICADO` | 0.02 | Probabilidad de mensaje duplicado |
+| `SIM_FUERA_ORDEN` | 0.02 | Probabilidad de intercambio de eventos consecutivos |
+| `SIM_MALFORMADO` | 0.01 | Probabilidad de mensaje malformado (para la DLQ) |
+
+Un fallo por `AUSENTE` reintenta con nueva secuencia (hasta 3 intentos); otros motivos
+o el tercer fallo terminan el ciclo del envío.
+
 ## Convenciones
 
 - **Arquitectura:** Kafka es el único punto de contacto entre servicios; MongoDB
