@@ -138,3 +138,66 @@ export function crearRepositorioNotificaciones(db) {
     },
   };
 }
+
+/** Nombre de la colección de alertas de SLA. */
+export const COLECCION_ALERTAS = 'alertas';
+
+/**
+ * Crea los índices de la colección `alertas` (estado+prioridad y shipmentId).
+ * @param {import('mongodb').Db} db Base de datos de MongoDB.
+ * @returns {Promise<void>} Resuelve cuando los índices existen.
+ */
+export async function asegurarIndicesAlertas(db) {
+  const coleccion = db.collection(COLECCION_ALERTAS);
+  await coleccion.createIndex({ estado: 1, prioridad: 1 }, { name: 'estado_prioridad' });
+  await coleccion.createIndex({ shipmentId: 1 }, { name: 'shipmentId' });
+  await coleccion.createIndex(
+    { shipmentId: 1, regla: 1 },
+    { unique: true, name: 'alerta_unica_por_regla' },
+  );
+}
+
+/**
+ * Repositorio de alertas de SLA (colección `alertas`).
+ * @typedef {object} RepositorioAlertas
+ * @property {(evento: import('@rutasur/shared/src/eventos/tipos.js').EventoAlertaSla) => Promise<{resultado: string}>} aplicarAlerta
+ *   Registra la apertura o el cierre de una alerta por regla.
+ */
+
+/**
+ * Crea el repositorio de alertas sobre una base de datos conectada.
+ * @param {import('mongodb').Db} db Base de datos de MongoDB.
+ * @returns {RepositorioAlertas} Repositorio listo para usar.
+ */
+export function crearRepositorioAlertas(db) {
+  const coleccion = db.collection(COLECCION_ALERTAS);
+  return {
+    async aplicarAlerta(evento) {
+      if (evento.estadoAlerta === 'ABIERTA') {
+        await coleccion.updateOne(
+          { shipmentId: evento.shipmentId, regla: evento.regla },
+          {
+            $setOnInsert: {
+              shipmentId: evento.shipmentId,
+              regla: evento.regla,
+              prioridad: evento.prioridad,
+              estado: 'ABIERTA',
+              venceEn: evento.venceEn,
+              abiertaEn: evento.ocurridoEn,
+              eventIdApertura: evento.eventId,
+              hubId: evento.hubId,
+              zonaId: evento.zonaId,
+            },
+          },
+          { upsert: true },
+        );
+        return { resultado: 'ABIERTA' };
+      }
+      const actualizado = await coleccion.updateOne(
+        { shipmentId: evento.shipmentId, regla: evento.regla, estado: 'ABIERTA' },
+        { $set: { estado: 'CERRADA', cerradaEn: evento.ocurridoEn, eventIdCierre: evento.eventId } },
+      );
+      return { resultado: actualizado.matchedCount > 0 ? 'CERRADA' : 'CIERRE_SIN_ALERTA' };
+    },
+  };
+}

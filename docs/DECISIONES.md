@@ -23,6 +23,29 @@ implementación.
 
 <!-- Agregar decisiones aquí siguiendo el formato. -->
 
+### 2026-10-13 — Barrido del monitor mapeado al reloj simulado
+
+- **Decisión:** el barrido corre cada `60000 / SIM_FACTOR_ACELERACION` ms reales
+  (1 minuto simulado), pero el "ahora" usado para evaluar es el máximo
+  `ocurridoEn` visto en los eventos, no el reloj de la máquina.
+- **Motivo:** la especificación exige que el tiempo de negocio venga de los
+  eventos (factor de aceleración); el intervalo real del temporizador solo es el
+  disparador de la evaluación. Si el flujo de eventos se detiene, el tiempo
+  simulado se congela y las alertas no avanzan solas.
+- **Alternativa descartada:** derivar el ahora simulado de `Date.now() * factor`:
+  funcionaría con el flujo continuo, pero rompe la regla de "nunca el reloj de la
+  máquina" y haría imposible barridos deterministas en tests.
+
+### 2026-10-13 — Operaciones del monitor serializadas
+
+- **Decisión:** `registrarPromesa`, `registrarEstado` y `barrer` pasan por una
+  cadena de promesas (exclusión mutua) dentro del motor.
+- **Motivo:** el barrido y el handler de eventos son asíncronos sobre el mismo
+  estado en memoria; sin serialización, dos evaluaciones concurrentes del mismo
+  envío podían emitir la misma alerta dos veces (detectado en la prueba end-to-end).
+- **Alternativa descartada:** lock por envío con Map de promesas: más granular,
+  pero innecesario para un único consumidor y más difícil de explicar.
+
 ### 2026-10-13 — Analítica consume también `envios.promesas`
 
 - **Decisión:** el servicio de analítica se suscribe además a `envios.promesas` y

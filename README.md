@@ -184,6 +184,35 @@ Recalcula los indicadores leyendo los topics desde el inicio con un grupo nuevo
 (dos pasadas: primero promesas, luego estados, deduplicando por `eventId`) y los
 compara contra `metricas_diarias`.
 
+## Servicio `monitor-sla` (CU3)
+
+```bash
+SIM_FACTOR_ACELERACION=120 npm start -w services/monitor-sla
+```
+
+Consume `envios.promesas` y `envios.estados` en el grupo `monitor-sla` y mantiene una
+tabla por envío (último estado + vencimiento) **en memoria con respaldo en MongoDB**
+(`monitor_sla_estado`, restaurada al arrancar: no se pierden ni repiten alertas).
+
+- **Reloj simulado:** el "ahora" es el máximo `ocurridoEn` recibido de los eventos;
+  nunca el reloj de la máquina. Si el simulador se detiene, el tiempo simulado se
+  congela (ver DECISIONES).
+- **Barrido:** cada 1 minuto simulado = `60000 / SIM_FACTOR_ACELERACION` ms reales.
+- **Reglas** (`src/reglas.js`, pura, con tests de borde):
+
+  | Regla | Condición | Prioridad |
+  | :--- | :--- | :--- |
+  | SIN_INGRESO | Faltan < 10 h y no ingresó al hub | MEDIA |
+  | SIN_SALIDA | Faltan < 4 h y no está en reparto | ALTA |
+  | FALLO_DIA_LIMITE | `ENTREGA_FALLIDA` en el día del vencimiento | ALTA |
+  | VENCIDO | Pasó el vencimiento sin `ENTREGADO` | CRITICA |
+
+- Evalúa al recibir cada evento y en cada barrido de los envíos abiertos; una misma
+  regla nunca alerta dos veces sobre el mismo envío, y `ENTREGADO` emite el cierre.
+- Las alertas se publican en `alertas.sla` y el **proyector** las materializa en la
+  colección `alertas` (índices `estado+prioridad`, `shipmentId`, y único por
+  `shipmentId+regla`).
+
 ## Servicio `simulador`
 
 Genera eventos de origen en Kafka según la especificación. Requiere el entorno levantado (`npm run up`).

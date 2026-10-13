@@ -23,8 +23,10 @@ import {
 import {
   crearRepositorioEnvios,
   crearRepositorioNotificaciones,
+  crearRepositorioAlertas,
   asegurarIndicesEnvios,
   asegurarIndicesNotificaciones,
+  asegurarIndicesAlertas,
 } from './almacenamiento.js';
 
 /**
@@ -39,8 +41,10 @@ async function main() {
   await asegurarIndicesIdempotencia(conexion.db);
   await asegurarIndicesEnvios(conexion.db);
   await asegurarIndicesNotificaciones(conexion.db);
+  await asegurarIndicesAlertas(conexion.db);
   const repositorio = crearRepositorioEnvios(conexion.db);
   const notificaciones = crearRepositorioNotificaciones(conexion.db);
+  const alertas = crearRepositorioAlertas(conexion.db);
   const marcarIdempotencia = crearMarcadorIdempotencia({ db: conexion.db, consumidor: GRUPOS.PROYECTOR });
 
   const productorDlq = await crearProductor({
@@ -76,6 +80,15 @@ async function main() {
           intento: repro.intento,
           resultado,
         });
+      } else if (contexto.topico === TOPICS.ALERTAS_SLA) {
+        const alerta = /** @type {import('@rutasur/shared/src/eventos/tipos.js').EventoAlertaSla} */ (evento);
+        const { resultado } = await alertas.aplicarAlerta(alerta);
+        logger.info('Alerta proyectada', {
+          shipmentId: alerta.shipmentId,
+          regla: alerta.regla,
+          prioridad: alerta.prioridad,
+          resultado,
+        });
       } else if (contexto.topico === TOPICS.NOTIFICACIONES) {
         const notificacion = /** @type {import('@rutasur/shared/src/eventos/tipos.js').EventoNotificacion} */ (evento);
         const registrada = await notificaciones.registrar(notificacion);
@@ -91,7 +104,7 @@ async function main() {
     brokers: config.kafkaBrokers,
     clientId: 'proyector',
     grupo: GRUPOS.PROYECTOR,
-    topicos: [TOPICS.ESTADOS, TOPICS.REPROGRAMACIONES, TOPICS.NOTIFICACIONES],
+    topicos: [TOPICS.ESTADOS, TOPICS.REPROGRAMACIONES, TOPICS.NOTIFICACIONES, TOPICS.ALERTAS_SLA],
     procesador,
     logger,
   });
