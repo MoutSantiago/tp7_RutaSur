@@ -103,6 +103,31 @@ Ambos aceptan un argumento opcional para filtrar por topic o por grupo.
 | `logger.js` | Logger JSON estructurado con loggers hijos por contexto |
 | `apagado.js` | Apagado ordenado ante SIGTERM/SIGINT con pasos de limpieza |
 
+## Servicio `proyector` (CU1)
+
+Consume `envios.estados` en el grupo `proyector` y mantiene la colección `envios`
+(un documento por envío: estado actual, promesa, intentos, historial embebido y
+última secuencia aplicada).
+
+```bash
+npm start -w services/proyector   # requiere npm run up
+```
+
+- Índices: `shipmentId` único, `estado+zonaId`, `promesa.venceEn`.
+- Regla de orden: un evento con secuencia `<=` a la aplicada se descarta.
+- Regla de duplicados: `eventId` ya registrado en `eventos_procesados` no se reaplica.
+- Eventos inválidos van a `envios.estados.dlq` con su motivo y el consumo continúa.
+- El offset se confirma solo después de escribir en MongoDB.
+
+### Reconstrucción de la vista
+
+```bash
+node scripts/rebuild-envios.js
+```
+
+Borra `envios` y la repuebla leyendo el topic desde el inicio con un grupo nuevo
+(`proyector-rebuild-*`), demostrando que la vista es derivada (NF: reconstrucción).
+
 ## Servicio `simulador`
 
 Genera eventos de origen en Kafka según la especificación. Requiere el entorno levantado (`npm run up`).
