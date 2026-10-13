@@ -44,11 +44,21 @@
  */
 
 /**
- * Resultado agregado de los tres indicadores.
+ * Fila del cuarto indicador: tiempo medio en hub.
+ * @typedef {object} FilaTiempoHub
+ * @property {string} hubId Hub.
+ * @property {string} fecha Día.
+ * @property {number} mediciones Cantidad de envíos medidos.
+ * @property {number} promedioHoras Tiempo medio en el hub (horas, 1 decimal).
+ */
+
+/**
+ * Resultado agregado de los indicadores.
  * @typedef {object} ResumenMetricas
  * @property {FilaTasa[]} tasaPrimerIntento Tasa por día/zona/franja.
  * @property {FilaMotivo[]} motivos Distribución de motivos por zona.
  * @property {FilaSla[]} slaHub Cumplimiento de SLA por hub y día.
+ * @property {FilaTiempoHub[]} tiempoHub Tiempo medio entre ingreso y salida del hub.
  */
 
 /**
@@ -160,5 +170,43 @@ export function resumirMetricas(docs, filtro = {}) {
     tasaPrimerIntento: agregarTasa(filtrados),
     motivos: agregarMotivos(filtrados),
     slaHub: agregarSla(filtrados, filtro),
+    tiempoHub: agregarTiempoHub(filtrados, filtro),
   };
+}
+
+/**
+ * Agrega el cuarto indicador: promedio de tiempo en hub por hub y día
+ * (suma/cantidad → promedio al leer; nunca se guarda el promedio).
+ * @param {import('./mongo.js').DocVista[]} docs Documentos ya filtrados por zona/fecha.
+ * @param {FiltroMetricas} filtro Filtros (usa filtro.hubId).
+ * @returns {FilaTiempoHub[]} Filas ordenadas por hub y fecha.
+ */
+function agregarTiempoHub(docs, filtro) {
+  /** @type {Map<string, FilaTiempoHub & {sumaMs: number}>} */
+  const porClave = new Map();
+  for (const d of docs) {
+    const porHub = /** @type {Record<string, {tiempoHubSumaMs?: number, tiempoHubCantidad?: number}> | undefined} */ (d.porHub);
+    if (!porHub) continue;
+    for (const [hubId, datos] of Object.entries(porHub)) {
+      if (filtro.hubId && hubId !== filtro.hubId) continue;
+      const cantidad = Number(datos.tiempoHubCantidad ?? 0);
+      const sumaMs = Number(datos.tiempoHubSumaMs ?? 0);
+      if (cantidad === 0) continue;
+      const clave = `${hubId}|${d.fecha}`;
+      const fila =
+        porClave.get(clave) ??
+        ({ hubId, fecha: String(d.fecha), mediciones: 0, sumaMs: 0, promedioHoras: 0 });
+      fila.mediciones += cantidad;
+      fila.sumaMs += sumaMs;
+      porClave.set(clave, fila);
+    }
+  }
+  return [...porClave.values()]
+    .map((f) => ({
+      hubId: f.hubId,
+      fecha: f.fecha,
+      mediciones: f.mediciones,
+      promedioHoras: Math.round(f.sumaMs / f.mediciones / 360000) / 10,
+    }))
+    .sort((a, b) => a.hubId.localeCompare(b.hubId) || a.fecha.localeCompare(b.fecha));
 }

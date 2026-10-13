@@ -20,6 +20,8 @@ export const GRUPOS = Object.freeze({
   REPROGRAMACION: 'reprogramacion',
   MONITOR_SLA: 'monitor-sla',
   ANALITICA: 'analitica',
+  /** Grupo nuevo del cuarto indicador: demuestra el reprocesamiento histórico (CU4). */
+  ANALITICA_TIEMPOS_HUB: 'analitica-tiempos-hub',
 });
 
 /** @readonly estados del ciclo de vida de un envío (topic envios.estados). */

@@ -120,6 +120,39 @@ export default async function PaginaAnalitica({ searchParams }) {
       </section>
 
       <section className="panel">
+        <h2>Tiempo medio en hub (entre ingreso y salida, por hub y día)</h2>
+        {resumen.tiempoHub.length === 0 && (
+          <p>
+            Sin datos todavía: este indicador lo calcula un grupo nuevo de consumidores que
+            reproduce el histórico — lanzalo con{' '}
+            <code>node scripts/replay-tiempos-hub.js</code>.
+          </p>
+        )}
+        {resumen.tiempoHub.length > 0 && (
+          <table>
+            <thead>
+              <tr>
+                <th>Hub</th>
+                <th>Día</th>
+                <th>Envíos medidos</th>
+                <th>Tiempo medio</th>
+              </tr>
+            </thead>
+            <tbody>
+              {resumen.tiempoHub.map((t) => (
+                <tr key={`${t.hubId}-${t.fecha}`}>
+                  <td>{t.hubId}</td>
+                  <td>{t.fecha}</td>
+                  <td>{t.mediciones}</td>
+                  <td>{t.promedioHoras} h</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </section>
+
+      <section className="panel">
         <h2>Cumplimiento de SLA por hub y día</h2>
         {resumen.slaHub.length === 0 && <p>Sin entregas evaluables para el filtro elegido.</p>}
         {resumen.slaHub.length > 0 && (

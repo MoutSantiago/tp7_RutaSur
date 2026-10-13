@@ -23,6 +23,39 @@ implementación.
 
 <!-- Agregar decisiones aquí siguiendo el formato. -->
 
+### 2026-10-13 — Cuarto indicador: día del EN_REPARTO, solo primer intento
+
+- **Decisión:** el tiempo medio en hub se imputa al documento diario del día/zona/
+  franja del evento `EN_REPARTO`, solo del primer intento, y se guarda como
+  `porHub.<hub>.tiempoHubSumaMs` + `tiempoHubCantidad`.
+- **Motivo:** el primer paso por el hub es el comparable entre envíos (los
+  reintentos empiezan desde "día hábil siguiente"); la suma y la cantidad permiten
+  recomputar el promedio incrementalmente al leer sin recalcular nada.
+- **Alternativa descartada:** imputar al día del INGRESADO_HUB: dividía casos
+  límite (ingreso 23:50, salida 00:10) entre dos documentos; guardar el promedio
+  directo: no es agregable incrementalmente.
+
+### 2026-10-13 — Replay como grupo nuevo sobre el log retenido
+
+- **Decisión:** el cuarto indicador se habilita con `scripts/replay-tiempos-hub.js`,
+  que crea el grupo `analitica-tiempos-hub` leyendo `envios.estados` desde el
+  inicio, reporta progreso/lag y termina al agotar el histórico.
+- **Motivo:** demuestra que los topics compactados/con retención de 30 días sostienen
+  reprocesar vistas sin reiniciar los consumidores productivos; como cada evento se
+  marca en `eventos_procesados` de ese grupo, relanzar el script no duplica sumas.
+- **Alternativa descartada:** job batch leyendo con `fetch` manual y apagando el
+  consumo: desaprovecha la propiedad clave de Kafka (offsets por grupo) que evalúa
+  el casos de uso 4.
+
+### 2026-10-13 — Escenarios del simulador responden sin bloquear
+
+- **Decisión:** `POST /escenarios/:nombre` genera de inmediato los ciclos y responde;
+  la publicación de sus eventos corre en segundo plano (la ráfaga publica sin esperas).
+- **Motivo:** el panel de demo no puede quedar colgado esperando ciclos que duran
+  de segundos a minutos reales según el factor de aceleración.
+- **Alternativa descartada:** responder al completar el ciclo: transformaba la llamada
+  en una espera larga y escondía el comportamiento asíncrono que la demo quiere mostrar.
+
 ### 2026-10-13 — API HTTP de control del simulador solo para la demo
 
 - **Decisión:** el simulador expone una API HTTP mínima (`POST /escenarios/:nombre`,

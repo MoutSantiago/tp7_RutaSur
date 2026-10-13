@@ -95,7 +95,26 @@ test('analítica: motivos agregan cantidades entre documentos de la misma zona',
   assert.deepEqual(motivos[0], { zonaId: 'ZONA-SUR', motivo: 'AUSENTE', cantidad: 12 });
 });
 
+test('analítica: tiempo medio en hub por hub y día (suma/cantidad -> promedio al leer)', () => {
+  const conTiempos = [
+    ...DOCS,
+    docMetricas({ fecha: '2026-10-13', zonaId: 'ZONA-SUR', hubs: { 'HUB-1': { cumplidos: 0, incumplidos: 0 } } }),
+  ];
+  // inyectar suma/cantidad de tiempo en ese documento
+  conTiempos[conTiempos.length - 1].porHub['HUB-1'].tiempoHubSumaMs = 10 * 3600000;
+  conTiempos[conTiempos.length - 1].porHub['HUB-1'].tiempoHubCantidad = 4;
+
+  const { tiempoHub } = resumirMetricas(conTiempos, {});
+  const fila = tiempoHub.find((t) => t.hubId === 'HUB-1');
+  assert.ok(fila);
+  assert.equal(fila.mediciones, 4);
+  assert.equal(fila.promedioHoras, 2.5);
+
+  const soloHub2 = resumirMetricas(conTiempos, { hubId: 'HUB-2' });
+  assert.ok(soloHub2.tiempoHub.every((t) => t.hubId === 'HUB-2'));
+});
+
 test('analítica: sin datos devuelve listas vacías sin fallar', () => {
   const vacio = resumirMetricas([], {});
-  assert.deepEqual(vacio, { tasaPrimerIntento: [], motivos: [], slaHub: [] });
+  assert.deepEqual(vacio, { tasaPrimerIntento: [], motivos: [], slaHub: [], tiempoHub: [] });
 });

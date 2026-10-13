@@ -184,6 +184,24 @@ Recalcula los indicadores leyendo los topics desde el inicio con un grupo nuevo
 (dos pasadas: primero promesas, luego estados, deduplicando por `eventId`) y los
 compara contra `metricas_diarias`.
 
+### Cuarto indicador y reprocesamiento (CU4)
+
+El indicador **tiempo medio entre ingreso y salida del hub** lo calcula un grupo
+de consumidores NUEVO que lee `envios.estados` desde el inicio:
+
+```bash
+node scripts/replay-tiempos-hub.js
+```
+
+- No reinicia ni toca los demás servicios (grupos y offsets son independientes).
+- Agregación incremental en `metricas_diarias`: guarda `sumaMs` + `cantidad` por
+  hub (el promedio se calcula al leer; nunca se guarda).
+- Idempotente vía `eventos_procesados`: repetir el replay no duplica.
+- Muestra progreso y lag en vivo y termina sola al agotar el histórico.
+- En `/analitica` aparece la tabla "Tiempo medio en hub", completa con datos
+  anteriores a la creación del grupo (posible porque el topic tiene retención de
+  30 días; detalle en DECISIONES.md).
+
 ## Servicio `monitor-sla` (CU3)
 
 ```bash
