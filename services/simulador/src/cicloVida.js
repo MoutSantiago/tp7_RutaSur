@@ -78,10 +78,11 @@ function elegirDimensiones(prng, config) {
  * @param {Zona} zona Zona del envío (define la tasa de fallo).
  * @param {number} intento Número de intento (1..MAX_INTENTOS).
  * @param {number} desdeMs Momento simulado desde el que se clasifica.
+ * @param {string} [forzado] Resultado forzado: 'ENTREGADO' o un motivo de fallo (para escenarios).
  * @returns {{eventosIntento: Array<{enMs: number, tipo: string, motivo?: string, intento: number}>, resultado: string, siguienteMomento: number}}
  *   Pasos del intento, estado resultante y momento simulado en que terminó.
  */
-function ejecutarIntento(prng, config, zona, intento, desdeMs) {
+function ejecutarIntento(prng, config, zona, intento, desdeMs, forzado) {
   const eventosIntento = [];
   let momento = desdeMs;
 
@@ -89,15 +90,23 @@ function ejecutarIntento(prng, config, zona, intento, desdeMs) {
   eventosIntento.push({ enMs: momento, tipo: 'EN_REPARTO', intento });
 
   momento += prng.entero(30, 240) * 60 * 1000;
-  const fallo = prng.chance(zona.tasaFallo);
+  const fallo = forzado ? forzado !== 'ENTREGADO' : prng.chance(zona.tasaFallo);
   if (!fallo) {
     eventosIntento.push({ enMs: momento, tipo: 'ENTREGADO', intento });
     return { eventosIntento, resultado: 'ENTREGADO', siguienteMomento: momento };
   }
-  const motivo = prng.elegirPonderado(config.motivosFalla);
+  const motivo = forzado && forzado !== 'ENTREGADO' ? forzado : prng.elegirPonderado(config.motivosFalla);
   eventosIntento.push({ enMs: momento, tipo: 'ENTREGA_FALLIDA', motivo, intento });
   return { eventosIntento, resultado: 'ENTREGA_FALLIDA', siguienteMomento: momento };
 }
+
+/**
+ * Forzados opcionales para los escenarios de demo (todos deterministas).
+ * @typedef {object} ForzadoCiclo
+ * @property {Array<string>} [fallos] Resultado forzado por intento: motivo de fallo o 'ENTREGADO'.
+ * @property {boolean} [demoraHub] Si es verdadero, el envío siempre se demora en el hub.
+ * @property {number} [slaHoras] Vencimiento forzado en horas simuladas desde la creación.
+ */
 
 /**
  * Genera el ciclo de vida completo de un envío.
@@ -106,13 +115,14 @@ function ejecutarIntento(prng, config, zona, intento, desdeMs) {
  * @param {ConfigSimulacion} opciones.config Configuración de la simulación.
  * @param {string} opciones.shipmentId Identificador del envío.
  * @param {number} opciones.inicioMs Momento simulado de creación del envío (epoch ms).
+ * @param {ForzadoCiclo} [opciones.forzar] Forzados de escenario (opcional).
  * @returns {CicloDeVida} Promesa de entrega y eventos de estado del envío.
  * @throws {Error} Si la configuración no tiene hubs o zonas.
  * @example
  * const ciclo = generarCicloDeVida({ prng: crearPrng(42), config, shipmentId: 'ENV-0001', inicioMs: Date.now() });
  * console.log(ciclo.eventos.map(e => e.tipo)); // ['CREADO', 'INGRESADO_HUB', ...]
  */
-export function generarCicloDeVida({ prng, config, shipmentId, inicioMs }) {
+export function generarCicloDeVida({ prng, config, shipmentId, inicioMs, forzar }) {
   if (config.hubs.length === 0 || config.zonas.length === 0) {
     throw new Error('La configuración debe incluir al menos un hub y una zona');
   }
@@ -156,7 +166,8 @@ export function generarCicloDeVida({ prng, config, shipmentId, inicioMs }) {
       ...dimensiones,
     });
 
-  const venceEn = inicioMs + prng.entero(24, 48) * HORA_SIMULADA_MS;
+  const venceEn =
+    inicioMs + (forzar?.slaHoras ?? prng.entero(24, 48)) * HORA_SIMULADA_MS;
   const promesa = crearPromesa(venceEn);
 
   const pasos = /** @type {Array<{enMs: number, tipo: string, motivo?: string, intento?: number}>} */ ([
@@ -166,7 +177,8 @@ export function generarCicloDeVida({ prng, config, shipmentId, inicioMs }) {
   let momento = inicioMs + prng.entero(1, 4) * HORA_SIMULADA_MS;
   pasos.push({ enMs: momento, tipo: 'INGRESADO_HUB' });
 
-  if (prng.chance(config.probabilidadDemoraHub)) {
+  const hayDemora = forzar?.demoraHub ?? prng.chance(config.probabilidadDemoraHub);
+  if (hayDemora) {
     momento += prng.entero(DEMORA_MIN_HUB_HORAS, 12) * HORA_SIMULADA_MS;
   }
   momento += prng.entero(30, 60) * 60 * 1000;
@@ -180,7 +192,7 @@ export function generarCicloDeVida({ prng, config, shipmentId, inicioMs }) {
       eventosIntento,
       resultado: resultadoIntento,
       siguienteMomento,
-    } = ejecutarIntento(prng, config, zona, intento, momento);
+    } = ejecutarIntento(prng, config, zona, intento, momento, forzar?.fallos?.[intento - 1]);
     for (const paso of eventosIntento) pasos.push(paso);
     momento = siguienteMomento;
     resultado = resultadoIntento;

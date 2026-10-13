@@ -1,11 +1,10 @@
 /**
  * Punto de entrada del simulador de RutaSur.
  *
- * Genera envíos a un ritmo configurable, construye su ciclo de vida con la
- * lógica pura de `cicloVida.js`, aplica defectos de publicación con
- * `defectos.js` y publica en Kafka (envios.promesas y envios.estados).
- * Las marcas temporales son simuladas (ocurridoEn), aceleradas respecto al
- * tiempo real según el factor configurado.
+ * Genera el flujo continuo de envíos y atiende la API HTTP de control
+ * (escenarios a pedido e inyección de eventos malformados). La generación de
+ * eventos es lógica pura (`cicloVida.js`, `escenarios.js`, `defectos.js`);
+ * este módulo solo orquesta la publicación en Kafka.
  */
 
 import {
@@ -19,6 +18,8 @@ import { crearPrng } from './prng.js';
 import { crearRelojSimulado, dormirSimulados } from './reloj.js';
 import { generarCicloDeVida } from './cicloVida.js';
 import { planificarPublicaciones } from './defectos.js';
+import { generarEscenario, crearMensajeMalformado } from './escenarios.js';
+import { crearApiControl } from './api.js';
 
 /** Prefijo de los identificadores de envío generados. */
 const PREFIJO_ENVIO = 'ENV';
@@ -33,50 +34,47 @@ function crearShipmentId(numero) {
 }
 
 /**
- * Ejecuta el ciclo de vida de un envío: publica la promesa y, en tiempos
- * simulados, cada publicación planificada del listado de estados.
- * @param {object} opciones Opciones de ejecución.
- * @param {import('./prng.js').Prng} opciones.prng Generador aleatorio.
- * @param {import('./cicloVida.js').ConfigSimulacion} opciones.config Configuración pura.
- * @param {import('./defectos.js').ProbabilidadesDefecto} opciones.probabilidades Defectos de publicación.
- * @param {import('./reloj.js').RelojSimulado} opciones.reloj Reloj simulado del servicio.
+ * Publica un ciclo de vida completo: la promesa y luego cada estado a su
+ * tiempo simulado (o sin espera si se pide, p. ej. la ráfaga).
+ * @param {object} opciones Opciones de publicación.
+ * @param {import('./cicloVida.js').CicloDeVida} opciones.ciclo Ciclo a publicar.
+ * @param {import('./prng.js').Prng} opciones.prng Generador aleatorio (defectos de publicación).
+ * @param {import('./defectos.js').ProbabilidadesDefecto} opciones.probabilidades Defectos.
+ * @param {import('./reloj.js').RelojSimulado} opciones.reloj Reloj simulado.
  * @param {import('@rutasur/shared').ProductorEventos} opciones.productor Productor Kafka.
  * @param {import('@rutasur/shared').Logger} opciones.logger Logger estructurado.
- * @param {string} opciones.shipmentId Identificador del envío.
- * @param {number} opciones.inicioMs Momento simulado de creación del envío.
- * @param {() => boolean} opciones.debeDetenerse Función que indica si el servicio está apagándose.
- * @returns {Promise<void>} Resuelve cuando se publicaron todos los eventos del envío.
+ * @param {boolean} opciones.sinEspera Si es verdadero publica todo sin esperar tiempos.
+ * @param {() => boolean} opciones.debeDetenerse Si el servicio está apagándose.
+ * @returns {Promise<void>} Resuelve cuando se publicó todo el ciclo.
  */
-export async function ejecutarEnvio({
+export async function publicarCiclo({
+  ciclo,
   prng,
-  config,
   probabilidades,
   reloj,
   productor,
   logger,
-  shipmentId,
-  inicioMs,
+  sinEspera,
   debeDetenerse,
 }) {
-  const ciclo = generarCicloDeVida({ prng, config, shipmentId, inicioMs });
-  const logEnvio = logger.hijo({ shipmentId });
-
+  const logEnvio = logger.hijo({ shipmentId: ciclo.shipmentId });
   await productor.publicar({ topico: TOPICS.PROMESAS, evento: ciclo.promesa });
-  logEnvio.info('Promesa publicada', { venceEn: ciclo.promesa.venceEn, franja: ciclo.promesa.franja });
 
   const plan = planificarPublicaciones({ prng, probabilidades, eventos: ciclo.eventos });
   for (const publicacion of plan) {
     if (debeDetenerse()) return;
-    const enMs =
-      typeof publicacion.valor === 'object' && publicacion.valor !== null
-        ? Date.parse(
-            /** @type {import('@rutasur/shared/src/eventos/tipos.js').EventoEstado} */ (
-              publicacion.valor
-            ).ocurridoEn,
-          )
-        : inicioMs;
-    const esperaMs = enMs - reloj.ahoraSimulado();
-    if (esperaMs > 0) await dormirSimulados(reloj, esperaMs);
+    if (!sinEspera) {
+      const enMs =
+        typeof publicacion.valor === 'object' && publicacion.valor !== null
+          ? Date.parse(
+              /** @type {import('@rutasur/shared/src/eventos/tipos.js').EventoEstado} */ (
+                publicacion.valor
+              ).ocurridoEn,
+            )
+          : 0;
+      const esperaMs = enMs ? Math.max(0, enMs - reloj.ahoraSimulado()) : 0;
+      if (esperaMs > 0) await dormirSimulados(reloj, esperaMs);
+    }
     if (debeDetenerse()) return;
     await productor.publicarCrudo({
       topico: TOPICS.ESTADOS,
@@ -84,23 +82,20 @@ export async function ejecutarEnvio({
       valor: publicacion.valor,
     });
   }
-  logEnvio.info('Ciclo de envío completado', {
+  logEnvio.info('Ciclo de envío publicado', {
     estadoFinal: ciclo.estadoFinal,
     intentos: ciclo.intentos,
   });
 }
 
 /**
- * Función principal del servicio: levanta la configuración, conecta el
- * productor y dispara el flujo continuo de envíos hasta detenerse.
+ * Función principal del servicio: configura, conecta el productor, atiende la
+ * API de control y dispara el flujo continuo de envíos hasta detenerse.
  * @returns {Promise<void>} Resuelve cuando el servicio termina de apagarse.
  */
 async function main() {
   const config = cargarConfigSimulador();
-  const logger = crearLogger({
-    servicio: 'simulador',
-    nivel: config.servicio.logNivel,
-  });
+  const logger = crearLogger({ servicio: 'simulador', nivel: config.servicio.logNivel });
   logger.info('Simulador iniciando', {
     enviosPorMinuto: config.enviosPorMinuto,
     factorAceleracion: config.factorAceleracion,
@@ -119,27 +114,117 @@ async function main() {
   let deteniendo = false;
   const debeDetenerse = () => deteniendo;
 
-  const intervaloMsReal = 60000 / config.enviosPorMinuto;
-  const temporizador = setInterval(() => {
-    numeroEnvio += 1;
-    if (config.enviosTotal > 0 && numeroEnvio > config.enviosTotal) {
-      clearInterval(temporizador);
-      return;
-    }
-    const shipmentId = crearShipmentId(numeroEnvio);
-    const inicioMs = reloj.ahoraSimulado();
-    ejecutarEnvio({
+  /**
+   * Genera y publica el ciclo del envío número n.
+   * @param {number} n Número correlativo del envío.
+   * @returns {Promise<void>} Resuelve cuando terminó de publicarse.
+   */
+  const ejecutarEnvio = (n) =>
+    publicarCiclo({
+      ciclo: generarCicloDeVida({
+        prng,
+        config,
+        shipmentId: crearShipmentId(n),
+        inicioMs: reloj.ahoraSimulado(),
+      }),
       prng,
-      config,
       probabilidades: config.probabilidades,
       reloj,
       productor,
       logger,
-      shipmentId,
-      inicioMs,
+      sinEspera: false,
       debeDetenerse,
-    }).catch((error) => logger.error('Falló el envío simulado', { shipmentId, error }));
-  }, intervaloMsReal);
+    });
+
+  // Flujo continuo (0 = desactivado, solo escenarios por API).
+  const intervaloMsReal = config.enviosPorMinuto > 0 ? 60000 / config.enviosPorMinuto : null;
+  /** @type {NodeJS.Timeout | null} */
+  const temporizador =
+    intervaloMsReal === null
+      ? null
+      : setInterval(() => {
+          numeroEnvio += 1;
+          if (config.enviosTotal > 0 && numeroEnvio > config.enviosTotal) {
+            if (temporizador) clearInterval(temporizador);
+            return;
+          }
+          ejecutarEnvio(numeroEnvio).catch((error) =>
+            logger.error('Falló el envío simulado', { envio: numeroEnvio, error }),
+          );
+        }, intervaloMsReal);
+
+  // API de control (canal del panel de demo; no lo usan otros servicios).
+  const puertoApi = Number(process.env.SIM_HTTP_PUERTO ?? 3010);
+  const servidor = crearApiControl({
+    puerto: puertoApi,
+    logger,
+    controlador: {
+      salud: () => ({
+        servicio: 'simulador',
+        enviosGenerados: numeroEnvio,
+        ahoraSimulado: new Date(reloj.ahoraSimulado()).toISOString(),
+      }),
+
+      async dispararEscenario(nombre) {
+        const resultado = generarEscenario({
+          nombre,
+          prng,
+          config,
+          inicioMs: reloj.ahoraSimulado(),
+          numeroBase: numeroEnvio + 1,
+          crearShipmentId,
+        });
+        numeroEnvio += resultado.cantidadUsados;
+        const sinEspera = nombre === 'rafaga';
+        let indice = 0;
+        for (const ciclo of resultado.ciclos) {
+          const publicacion = publicarCiclo({
+            ciclo,
+            prng,
+            probabilidades: config.probabilidades,
+            reloj,
+            productor,
+            logger,
+            sinEspera,
+            debeDetenerse,
+          }).catch((error) =>
+            logger.error('Falló un envío de escenario', { shipmentId: ciclo.shipmentId, error }),
+          );
+          if (sinEspera) {
+            indice += 1;
+            // Cede el event loop cada 50 envíos para no acaparar el proceso.
+            if (indice % 50 === 0) await new Promise((resolver) => setImmediate(resolver));
+            continue;
+          }
+          await publicacion;
+        }
+        logger.info('Escenario disparado', {
+          escenario: nombre,
+          envios: resultado.ciclos.map((c) => c.shipmentId),
+        });
+        return {
+          envios: resultado.ciclos.map((c) => c.shipmentId),
+          descripcion: resultado.descripcion,
+        };
+      },
+
+      async inyectarMalformado() {
+        const mensaje = crearMensajeMalformado({
+          shipmentId: crearShipmentId(numeroEnvio + 1),
+        });
+        await productor.publicarCrudo({
+          topico: TOPICS.ESTADOS,
+          clave: mensaje.clave,
+          valor: mensaje.valor,
+        });
+        logger.info('Mensaje malformado inyectado', { clave: mensaje.clave });
+        return { clave: mensaje.clave };
+      },
+    },
+  });
+  servidor.listen(puertoApi, () => {
+    logger.info('API de control escuchando', { puerto: puertoApi });
+  });
 
   registrarApagadoOrdenado({
     logger,
@@ -148,14 +233,21 @@ async function main() {
         nombre: 'temporizador',
         ejecutar: () => {
           deteniendo = true;
-          clearInterval(temporizador);
+          if (temporizador) clearInterval(temporizador);
         },
+      },
+      {
+        nombre: 'api-control',
+        ejecutar: () =>
+          new Promise((resolver, rechazar) =>
+            servidor.close((error) => (error ? rechazar(error) : resolver(null))),
+          ),
       },
       { nombre: 'productor-kafka', ejecutar: () => productor.cerrar() },
     ],
   });
 
-  logger.info('Simulador en marcha', { intervaloMsReal });
+  logger.info('Simulador en marcha', { intervaloMsReal, flujoContinuo: intervaloMsReal !== null });
 }
 
 await main();

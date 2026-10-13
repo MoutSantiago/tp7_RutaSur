@@ -239,6 +239,33 @@ Parámetros por variables de entorno (valores por defecto de la especificación)
 Un fallo por `AUSENTE` reintenta con nueva secuencia (hasta 3 intentos); otros motivos
 o el tercer fallo terminan el ciclo del envío.
 
+## API HTTP de control del simulador (panel de demo)
+
+El simulador expone una API mínima para disparar escenarios durante la demo
+(puerto `SIM_HTTP_PUERTO`, default **3010**). Es solo un canal de comando: los
+servicios de negocio se comunican exclusivamente por Kafka (ver DECISIONES).
+
+| Endpoint | Acción |
+| :--- | :--- |
+| `GET /salud` | Estado del servicio y hora simulada actual |
+| `POST /escenarios/feliz` | Un envío recorre todo el ciclo sin incidentes |
+| `POST /escenarios/ausente` | Falla por ausencia, se reprograma y entrega en el 2.º intento |
+| `POST /escenarios/demorado` | Detenido en el hub con SLA ajustado (5 h): dispara alertas |
+| `POST /escenarios/tercer-fallo` | Tres fallos por ausencia → devolución al comercio |
+| `POST /escenarios/rafaga` | 500 envíos en pocos segundos (acumulación y recuperación) |
+| `POST /eventos/malformado` | Inyecta un mensaje inválido en `envios.estados` (va a la DLQ) |
+
+Ejemplos:
+
+```bash
+curl localhost:3010/salud
+curl -X POST localhost:3010/escenarios/ausente
+curl -X POST localhost:3010/eventos/malformado
+```
+
+Con `SIM_ENVIOS_POR_MINUTO=0` el flujo continuo queda desactivado y solo se
+generan los escenarios disparados por API.
+
 ## Convenciones
 
 - **Arquitectura:** Kafka es el único punto de contacto entre servicios; MongoDB

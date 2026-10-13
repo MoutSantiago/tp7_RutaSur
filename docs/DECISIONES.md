@@ -23,6 +23,19 @@ implementación.
 
 <!-- Agregar decisiones aquí siguiendo el formato. -->
 
+### 2026-10-13 — API HTTP de control del simulador solo para la demo
+
+- **Decisión:** el simulador expone una API HTTP mínima (`POST /escenarios/:nombre`,
+  `POST /eventos/malformado`, `GET /salud`) para que el panel de demo dispare
+  escenarios a pedido.
+- **Motivo:** la especificación exige escenarios "disparados a pedido" durante la
+  presentación y un canal para inyectar el evento malformado; un endpoint HTTP es lo
+  más simple para un panel en Next.js. No viola la regla de la arquitectura porque no
+  es comunicación entre servicios de negocio: es un plano de control.
+- **Alternativa descartada:** topic Kafka `comandos.demo` para disparar escenarios:
+  más "puro" pero exige al panel publicar en Kafka (que la spec prohíbe: "el frontend
+  no depende de Kafka").
+
 ### 2026-10-13 — Barrido del monitor mapeado al reloj simulado
 
 - **Decisión:** el barrido corre cada `60000 / SIM_FACTOR_ACELERACION` ms reales

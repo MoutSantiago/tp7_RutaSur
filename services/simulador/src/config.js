@@ -21,7 +21,7 @@ const HUBS = Object.freeze(['HUB-1', 'HUB-2', 'HUB-3']);
  * Configuración completa del simulador.
  * @typedef {object} ConfigSimulador
  * @property {import('@rutasur/shared').Configuracion} servicio Configuración común del servicio.
- * @property {number} enviosPorMinuto Envíos nuevos por minuto real (SIM_ENVIOS_POR_MINUTO).
+ * @property {number} enviosPorMinuto Envíos nuevos por minuto real (SIM_ENVIOS_POR_MINUTO); 0 = sin flujo continuo.
  * @property {number} factorAceleracion Factor de aceleración (SIM_FACTOR_ACELERACION).
  * @property {number} semilla Semilla fija del PRNG (SIM_SEMILLA).
  * @property {number} enviosTotal Envíos a generar en total; 0 = infinito (SIM_ENVIOS_TOTAL).
@@ -92,7 +92,7 @@ export function cargarConfigSimulador({ env = process.env } = {}) {
 
   return {
     servicio,
-    enviosPorMinuto: leerNumero(env, 'SIM_ENVIOS_POR_MINUTO', 20, { min: 1, max: 100000 }),
+    enviosPorMinuto: leerNumero(env, 'SIM_ENVIOS_POR_MINUTO', 20, { min: 0, max: 100000 }),
     factorAceleracion: leerNumero(env, 'SIM_FACTOR_ACELERACION', FACTOR_ACELERACION_POR_DEFECTO, {
       min: 0.0001,
       max: 1000000,
