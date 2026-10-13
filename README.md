@@ -281,7 +281,12 @@ npm run dev -w apps/web    # http://localhost:3000
 | :--- | :--- |
 | `/` | Torre de control: contadores por estado, cola de alertas priorizada (Crítica > Alta > Media) y últimos envíos |
 | `/envios/[shipmentId]` | Detalle: línea de tiempo, intentos, alertas y notificaciones (en vivo) |
+| `/tracking/[shipmentId]` | Tracking público: solo estado y fecha estimada (vista saneada, sin datos internos) |
+| `/analitica` | Tres indicadores de CU4 con filtros por zona, hub y fecha |
+| `/demo` | Panel de demo: botones de escenarios + inyección de evento malformado |
 | `GET /api/stream` | SSE con eventos `envio`, `alerta` y `notificacion` (change streams de esas colecciones) |
+| `GET /api/tracking/[shipmentId]/stream` | SSE público: solo la vista saneada del envío |
+| `POST /api/demo/[accion]` | Proxy del panel de demo hacia la API de control del simulador |
 
 Estructura:
 

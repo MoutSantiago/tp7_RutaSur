@@ -179,3 +179,32 @@ a {
   color: var(--critica);
   font-size: 0.8rem;
 }
+
+.filtros label {
+  margin-right: 1rem;
+}
+
+.filtros select,
+.filtros button,
+.boton-demo {
+  background: var(--fondo);
+  color: var(--texto);
+  border: 1px solid var(--borde);
+  border-radius: 6px;
+  padding: 0.35rem 0.7rem;
+}
+
+.boton-demo {
+  cursor: pointer;
+  font-size: 0.9rem;
+}
+
+.boton-demo:disabled {
+  opacity: 0.5;
+  cursor: wait;
+}
+
+.estado-grande {
+  font-size: 1.5rem;
+  font-weight: 700;
+}

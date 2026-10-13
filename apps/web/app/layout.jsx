@@ -20,7 +20,8 @@ export default function RootLayout({ children }) {
             RutaSur <small>torre de control</small>
           </h1>
           <nav>
-            <a href="/">Torre de control</a>
+            <a href="/">Torre de control</a> · <a href="/tracking/ENV-000001">Tracking</a> ·{' '}
+            <a href="/analitica">Analítica</a> · <a href="/demo">Demo</a>
           </nav>
         </header>
         <main className="contenido">{children}</main>

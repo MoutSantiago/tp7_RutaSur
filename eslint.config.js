@@ -36,6 +36,7 @@ export default [
         ReadableStream: 'readonly',
         TextEncoder: 'readonly',
         EventSource: 'readonly',
+        fetch: 'readonly',
         window: 'readonly',
         document: 'readonly',
       },

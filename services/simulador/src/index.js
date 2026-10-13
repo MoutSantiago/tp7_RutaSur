@@ -176,6 +176,8 @@ async function main() {
         });
         numeroEnvio += resultado.cantidadUsados;
         const sinEspera = nombre === 'rafaga';
+        // El endpoint responde de inmediato: los envíos del escenario se
+        // publican en segundo plano (y para la ráfaga se cede el event loop).
         let indice = 0;
         for (const ciclo of resultado.ciclos) {
           const publicacion = publicarCiclo({
@@ -192,11 +194,9 @@ async function main() {
           );
           if (sinEspera) {
             indice += 1;
-            // Cede el event loop cada 50 envíos para no acaparar el proceso.
             if (indice % 50 === 0) await new Promise((resolver) => setImmediate(resolver));
-            continue;
           }
-          await publicacion;
+          void publicacion; // no se espera: la publicación corre en background
         }
         logger.info('Escenario disparado', {
           escenario: nombre,
@@ -239,9 +239,10 @@ async function main() {
       {
         nombre: 'api-control',
         ejecutar: () =>
-          new Promise((resolver, rechazar) =>
-            servidor.close((error) => (error ? rechazar(error) : resolver(null))),
-          ),
+          new Promise((resolver, rechazar) => {
+            servidor.closeAllConnections?.();
+            servidor.close((error) => (error ? rechazar(error) : resolver(null)));
+          }),
       },
       { nombre: 'productor-kafka', ejecutar: () => productor.cerrar() },
     ],

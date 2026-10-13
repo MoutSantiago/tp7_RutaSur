@@ -129,3 +129,45 @@ export async function obtenerDetalleEnvio(shipmentId) {
     notificaciones: notifsDoc.map((n) => /** @type {DocVista} */ (n)),
   };
 }
+
+import { sanearTracking } from './tracking.js';
+
+/**
+ * Tracking público: devuelve SOLO los campos visibles para el destinatario.
+ * @param {string} shipmentId Identificador del envío.
+ * @returns {Promise<ReturnType<typeof sanearTracking>>} Vista pública, o null si no existe.
+ */
+export async function obtenerTrackingEnvio(shipmentId) {
+  const db = await obtenerDb();
+  const doc = await db.collection('envios').findOne({ shipmentId }, { projection: { _id: 0 } });
+  return sanearTracking(/** @type {DocVista | null} */ (doc));
+}
+
+/**
+ * Lee los documentos crudos de `metricas_diarias` (la agregación de los
+ * indicadores se hace en `lib/metricas.js`, función pura testeable).
+ * @returns {Promise<DocVista[]>} Documentos de métricas sin `_id`.
+ */
+export async function obtenerDocumentosMetricas() {
+  const db = await obtenerDb();
+  const docs = await db.collection('metricas_diarias').find({}, { projection: { _id: 0 } }).toArray();
+  return docs.map((d) => /** @type {DocVista} */ (d));
+}
+
+/**
+ * Opciones disponibles para los filtros del panel analítico.
+ * @returns {Promise<{zonas: string[], hubs: string[], fechas: string[]}>} Valores distintos presentes en la base.
+ */
+export async function obtenerOpcionesFiltros() {
+  const db = await obtenerDb();
+  const [zonas, hubs, fechas] = await Promise.all([
+    db.collection('envios').distinct('zonaId'),
+    db.collection('envios').distinct('hubId'),
+    db.collection('metricas_diarias').distinct('fecha'),
+  ]);
+  return {
+    zonas: zonas.filter(Boolean).sort(),
+    hubs: hubs.filter(Boolean).sort(),
+    fechas: fechas.filter(Boolean).sort().reverse(),
+  };
+}
