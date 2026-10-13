@@ -20,7 +20,12 @@ import {
   asegurarIndicesIdempotencia,
   registrarApagadoOrdenado,
 } from '@rutasur/shared';
-import { crearRepositorioEnvios, asegurarIndicesEnvios } from './almacenamiento.js';
+import {
+  crearRepositorioEnvios,
+  crearRepositorioNotificaciones,
+  asegurarIndicesEnvios,
+  asegurarIndicesNotificaciones,
+} from './almacenamiento.js';
 
 /**
  * Arranca el servicio proyector y queda consumiendo hasta recibir una señal.
@@ -33,7 +38,9 @@ async function main() {
   const conexion = await conectarMongo({ uri: config.mongoUri, dbName: config.mongoDb, logger });
   await asegurarIndicesIdempotencia(conexion.db);
   await asegurarIndicesEnvios(conexion.db);
+  await asegurarIndicesNotificaciones(conexion.db);
   const repositorio = crearRepositorioEnvios(conexion.db);
+  const notificaciones = crearRepositorioNotificaciones(conexion.db);
   const marcarIdempotencia = crearMarcadorIdempotencia({ db: conexion.db, consumidor: GRUPOS.PROYECTOR });
 
   const productorDlq = await crearProductor({
@@ -49,16 +56,34 @@ async function main() {
     enviarADlq: ({ clave, valor }) =>
       productorDlq.publicarCrudo({ topico: TOPICS.DLQ_ESTADOS, clave, valor }),
     handler: async (evento, contexto) => {
-      const estado = /** @type {import('@rutasur/shared/src/eventos/tipos.js').EventoEstado} */ (evento);
-      const { resultado } = await repositorio.aplicarEstado(estado);
-      logger.info('Evento de estado proyectado', {
-        shipmentId: estado.shipmentId,
-        tipo: estado.tipo,
-        secuencia: estado.secuencia,
-        resultado,
-        particion: contexto.particion,
-        offset: contexto.offset,
-      });
+      if (contexto.topico === TOPICS.ESTADOS) {
+        const estado = /** @type {import('@rutasur/shared/src/eventos/tipos.js').EventoEstado} */ (evento);
+        const { resultado } = await repositorio.aplicarEstado(estado);
+        logger.info('Evento de estado proyectado', {
+          shipmentId: estado.shipmentId,
+          tipo: estado.tipo,
+          secuencia: estado.secuencia,
+          resultado,
+          particion: contexto.particion,
+          offset: contexto.offset,
+        });
+      } else if (contexto.topico === TOPICS.REPROGRAMACIONES) {
+        const repro = /** @type {import('@rutasur/shared/src/eventos/tipos.js').EventoReprogramacion} */ (evento);
+        const { resultado } = await repositorio.aplicarReprogramacion(repro);
+        logger.info('Reprogramación proyectada', {
+          shipmentId: repro.shipmentId,
+          resultadoReprogramacion: repro.resultado,
+          intento: repro.intento,
+          resultado,
+        });
+      } else if (contexto.topico === TOPICS.NOTIFICACIONES) {
+        const notificacion = /** @type {import('@rutasur/shared/src/eventos/tipos.js').EventoNotificacion} */ (evento);
+        const registrada = await notificaciones.registrar(notificacion);
+        logger.info('Notificación registrada', {
+          shipmentId: notificacion.shipmentId,
+          duplicada: !registrada,
+        });
+      }
     },
   });
 
@@ -66,7 +91,7 @@ async function main() {
     brokers: config.kafkaBrokers,
     clientId: 'proyector',
     grupo: GRUPOS.PROYECTOR,
-    topicos: [TOPICS.ESTADOS],
+    topicos: [TOPICS.ESTADOS, TOPICS.REPROGRAMACIONES, TOPICS.NOTIFICACIONES],
     procesador,
     logger,
   });

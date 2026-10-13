@@ -128,6 +128,30 @@ node scripts/rebuild-envios.js
 Borra `envios` y la repuebla leyendo el topic desde el inicio con un grupo nuevo
 (`proyector-rebuild-*`), demostrando que la vista es derivada (NF: reconstrucción).
 
+## Servicios `notificaciones` y `reprogramacion` (CU2)
+
+Ambos consumen `envios.estados` en grupos independientes ante cada `ENTREGA_FALLIDA`:
+
+```bash
+npm start -w services/notificaciones    # grupo notificaciones
+npm start -w services/reprogramacion    # grupo reprogramacion
+```
+
+- **Notificaciones** registra el aviso y publica **exactamente una** notificación por fallo
+  en `notificaciones.enviadas` (idempotencia por `eventos_procesados`).
+- **Reprogramación** publica en `envios.reprogramaciones` según las reglas puras
+  (`src/reglas.js`):
+  - `AUSENTE` → nuevo intento el **día hábil siguiente** en la **franja opuesta** (AM↔PM).
+  - `DIRECCION_INCORRECTA` → `RETENIDO` hasta corrección (no se reprograma solo).
+  - `RECHAZADO` → `DEVOLUCION` al comercio.
+  - Tercer fallo (cualquier motivo) → `DEVOLUCION`.
+  - `ZONA_INACCESIBLE` → `RETENIDO` (la spec no lo detalla; decisión documentada en DECISIONES).
+
+El **proyector** además consume `envios.reprogramaciones` y `notificaciones.enviadas`:
+las decisiones se agregan al historial, actualizan `intentos` y el estado derivado
+(`RETENIDO`/`DEVOLUCION`), y las notificaciones se guardan en la colección
+`notificaciones` (índice único por `eventId`).
+
 ## Servicio `simulador`
 
 Genera eventos de origen en Kafka según la especificación. Requiere el entorno levantado (`npm run up`).

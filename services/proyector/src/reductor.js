@@ -18,12 +18,61 @@
  * @property {string} hubId Centro de distribución.
  * @property {string} repartidorId Repartidor asignado.
  * @property {number} intentos Mayor número de intento registrado.
- * @property {Array<{tipo: string, ocurridoEn: string, secuencia: number, motivo?: string, intento?: number}>} historial
- *   Historial embebido de eventos aplicados.
+ * @property {Array<{tipo: string, ocurridoEn: string, secuencia: number, motivo?: string, intento?: number, eventId?: string, nuevoIntentoEn?: string, franja?: string}>} historial
+ *   Historial embebido de eventos y decisiones aplicados.
  * @property {import('@rutasur/shared/src/eventos/tipos.js').EventoPromesa | null} [promesa] Promesa vigente (se completa en pasos posteriores).
  * @property {number} ultimaSecuencia Última secuencia aplicada.
  * @property {string} ultimaActualizacion ISO del último evento aplicado.
  */
+
+/** @readonly nombres de estado derivados de reprogramaciones en la vista. */
+export const ESTADOS_POR_RESULTADO = Object.freeze({
+  RETENIDO: 'RETENIDO',
+  DEVOLUCION: 'DEVOLUCION',
+});
+
+/**
+ * Aplica un evento de reprogramación al documento del envío.
+ * Las reprogramaciones no mueven `ultimaSecuencia` (la línea de tiempo de los
+ * estados la gobierna `envios.estados`); actualizan el historial, los intentos
+ * y, según el resultado, el estado derivado (RETENIDO / DEVOLUCION).
+ * @param {DocumentoEnvio | null} documento Documento actual del envío.
+ * @param {import('@rutasur/shared/src/eventos/tipos.js').EventoReprogramacion} evento Evento de reprogramación.
+ * @returns {ResultadoReduccion} Resultado de la reducción.
+ * @throws {Error} Si el envío no existe aún en la vista (la reprogramación llegó antes que los estados).
+ */
+export function aplicarReprogramacion(documento, evento) {
+  if (!documento) {
+    throw new Error(
+      `No existe el envío ${evento.shipmentId} al aplicar la reprogramación`,
+    );
+  }
+  if (documento.historial.some((h) => 'eventId' in h && h.eventId === evento.eventId)) {
+    return { resultado: RESULTADOS_REDUCCION.DESCARTADO_POR_ORDEN, documento: null };
+  }
+  const entradaHistorial = /** @type {DocumentoEnvio['historial'][number]} */ ({
+    tipo: `REPROGRAMACION:${evento.resultado}`,
+    ocurridoEn: evento.ocurridoEn,
+    secuencia: evento.secuencia,
+    intento: evento.intento,
+    motivo: evento.motivo,
+    eventId: evento.eventId,
+    ...(evento.nuevoIntentoEn !== undefined ? { nuevoIntentoEn: evento.nuevoIntentoEn } : {}),
+    ...(evento.franja !== undefined ? { franja: evento.franja } : {}),
+  });
+  const mapeo = /** @type {Record<string, string>} */ (ESTADOS_POR_RESULTADO);
+  const nuevoEstado = mapeo[evento.resultado] ?? documento.estado;
+  return {
+    resultado: RESULTADOS_REDUCCION.APLICADO,
+    documento: {
+      ...documento,
+      estado: nuevoEstado,
+      intentos: Math.max(documento.intentos, evento.intento),
+      historial: [...documento.historial, entradaHistorial],
+      ultimaActualizacion: evento.ocurridoEn,
+    },
+  };
+}
 
 /** @readonly resultados posibles de decidir la aplicación de un evento. */
 export const RESULTADOS_REDUCCION = Object.freeze({

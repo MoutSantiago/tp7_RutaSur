@@ -6,7 +6,8 @@
   "description": "Servicio de reprogramación de RutaSur: decide el próximo intento",
   "main": "src/index.js",
   "scripts": {
-    "test": "node --test test/*.test.js"
+    "test": "node --test test/*.test.js",
+    "start": "node src/index.js"
   },
   "dependencies": {
     "@rutasur/shared": "0.1.0"
