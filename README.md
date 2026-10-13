@@ -152,6 +152,38 @@ las decisiones se agregan al historial, actualizan `intentos` y el estado deriva
 (`RETENIDO`/`DEVOLUCION`), y las notificaciones se guardan en la colección
 `notificaciones` (índice único por `eventId`).
 
+## Servicio `analitica` (CU4)
+
+Consume `envios.estados` y `envios.promesas` en el grupo `analitica` y actualiza
+`metricas_diarias` **solo con incrementos atómicos** (`$inc` + upsert), con índice
+único `fecha+zonaId+franja`.
+
+```bash
+npm start -w services/analitica
+```
+
+Indicadores alimentados:
+
+| Indicador | Campos del documento | Dimensiones |
+| :--- | :--- | :--- |
+| Tasa de entrega en primer intento | `intentosPrimeros.total` / `.exitosos` | día, zona, franja |
+| Distribución de motivos de fallo | `motivos.<MOTIVO>` | día, zona, franja |
+| Cumplimiento de SLA | `sla.cumplidos` / `.incumplidos` y `porHub.<hubId>.sla.*` | día, zona, franja, hub |
+
+Para evaluar el SLA guarda en la colección interna `promesas_envios` el vencimiento
+de cada envío (ver DECISIONES). La idempotencia (`eventos_procesados`) garantiza que
+un evento reprocesado no incrementa dos veces.
+
+### Verificación manual de las métricas
+
+```bash
+node scripts/verificar-metricas.js   # exit 0 si coinciden todos los agregados
+```
+
+Recalcula los indicadores leyendo los topics desde el inicio con un grupo nuevo
+(dos pasadas: primero promesas, luego estados, deduplicando por `eventId`) y los
+compara contra `metricas_diarias`.
+
 ## Servicio `simulador`
 
 Genera eventos de origen en Kafka según la especificación. Requiere el entorno levantado (`npm run up`).
