@@ -14,7 +14,8 @@ export const metadata = {
 export default function RootLayout({ children }) {
   return (
     <html lang="es">
-      <body>
+      {/* suppressHydrationWarning: extensiones del navegador (p. ej. ColorZilla) agregan atributos al body */}
+      <body suppressHydrationWarning>
         <header className="cabecera">
           <h1>
             RutaSur <small>torre de control</small>
