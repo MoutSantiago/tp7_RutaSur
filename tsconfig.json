@@ -9,6 +9,7 @@
     "strict": true,
     "skipLibCheck": true,
     "esModuleInterop": true,
+    "jsx": "react-jsx",
     "forceConsistentCasingInFileNames": true,
     "baseUrl": ".",
     "paths": {
@@ -16,6 +17,6 @@
       "@rutasur/shared/*": ["packages/shared/src/*"]
     }
   },
-  "include": ["packages/**/*.js", "services/**/*.js", "apps/**/*.js"],
+  "include": ["packages/**/*.js", "services/**/*.js", "apps/**/*.js", "apps/**/*.jsx"],
   "exclude": ["node_modules", "**/.next/**", "**/dist/**"]
 }

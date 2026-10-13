@@ -1,0 +1,181 @@
+:root {
+  --fondo: #0e1621;
+  --panel: #182230;
+  --borde: #2c3a4d;
+  --texto: #e6edf3;
+  --tenue: #8b9bb0;
+  --ok: #2ea043;
+  --critica: #f85149;
+  --alta: #e89b0a;
+  --media: #1f6feb;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--fondo);
+  color: var(--texto);
+  font-family: system-ui, sans-serif;
+  font-size: 14px;
+}
+
+.cabecera {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.75rem 1.25rem;
+  background: var(--panel);
+  border-bottom: 1px solid var(--borde);
+}
+
+.cabecera h1 {
+  font-size: 1.1rem;
+  margin: 0;
+}
+
+.cabecera small {
+  color: var(--tenue);
+  font-weight: normal;
+}
+
+.cabecera a {
+  color: var(--texto);
+}
+
+.contenido {
+  padding: 1.25rem;
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+.panel {
+  background: var(--panel);
+  border: 1px solid var(--borde);
+  border-radius: 8px;
+  padding: 1rem;
+  margin-bottom: 1rem;
+}
+
+.panel h2 {
+  margin-top: 0;
+  font-size: 0.95rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--tenue);
+}
+
+.contadores {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+
+.contador {
+  background: var(--fondo);
+  border: 1px solid var(--borde);
+  border-radius: 8px;
+  padding: 0.6rem 1rem;
+  min-width: 130px;
+}
+
+.contador .numero {
+  font-size: 1.6rem;
+  font-weight: 700;
+}
+
+.contador .etiqueta {
+  color: var(--tenue);
+  font-size: 0.8rem;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+th,
+td {
+  text-align: left;
+  padding: 0.4rem 0.5rem;
+  border-bottom: 1px solid var(--borde);
+}
+
+th {
+  color: var(--tenue);
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+
+a {
+  color: var(--media);
+  text-decoration: none;
+}
+
+.etiqueta-estado,
+.etiqueta-prioridad {
+  display: inline-block;
+  padding: 0.1rem 0.5rem;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  border: 1px solid var(--borde);
+}
+
+.prioridad-CRITICA {
+  color: var(--critica);
+  border-color: var(--critica);
+}
+
+.prioridad-ALTA {
+  color: var(--alta);
+  border-color: var(--alta);
+}
+
+.prioridad-MEDIA {
+  color: var(--media);
+  border-color: var(--media);
+}
+
+.estado-ENTREGADO {
+  color: var(--ok);
+  border-color: var(--ok);
+}
+
+.timeline {
+  list-style: none;
+  padding: 0;
+  border-left: 2px solid var(--borde);
+  margin-left: 0.5rem;
+}
+
+.timeline li {
+  position: relative;
+  padding: 0.4rem 0 0.4rem 1.2rem;
+}
+
+.timeline li::before {
+  content: '';
+  position: absolute;
+  left: -6px;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--media);
+}
+
+.timeline .hora {
+  color: var(--tenue);
+  font-size: 0.8rem;
+}
+
+.aviso-vivo {
+  color: var(--ok);
+  font-size: 0.8rem;
+}
+
+.aviso-cortado {
+  color: var(--critica);
+  font-size: 0.8rem;
+}

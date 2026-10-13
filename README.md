@@ -266,6 +266,31 @@ curl -X POST localhost:3010/eventos/malformado
 Con `SIM_ENVIOS_POR_MINUTO=0` el flujo continuo queda desactivado y solo se
 generan los escenarios disparados por API.
 
+## Interfaz web (`apps/web`, Next.js)
+
+Torre de control y detalle de envío, renderizadas en el servidor y actualizadas en
+vivo por **Server-Sent Events** sobre los change streams de MongoDB. **Solo lee de
+MongoDB**; jamás toca Kafka.
+
+```bash
+npm run up
+npm run dev -w apps/web    # http://localhost:3000
+```
+
+| Ruta | Pantalla |
+| :--- | :--- |
+| `/` | Torre de control: contadores por estado, cola de alertas priorizada (Crítica > Alta > Media) y últimos envíos |
+| `/envios/[shipmentId]` | Detalle: línea de tiempo, intentos, alertas y notificaciones (en vivo) |
+| `GET /api/stream` | SSE con eventos `envio`, `alerta` y `notificacion` (change streams de esas colecciones) |
+
+Estructura:
+
+- `lib/mongo.js` — capa de acceso a datos (única que toca MongoDB).
+- `app/api/stream/route.js` — route handler SSE con cierre limpio al desconectar.
+- `app/components/TorreControl.jsx`, `DetalleEnvio.jsx` — componentes cliente que
+  aplican los cambios SSE (EventSource reconecta solo).
+- Estilos CSS a mano (`app/globals.css`); sin librerías de UI.
+
 ## Convenciones
 
 - **Arquitectura:** Kafka es el único punto de contacto entre servicios; MongoDB

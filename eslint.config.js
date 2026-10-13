@@ -18,6 +18,9 @@ export default [
     languageOptions: {
       ecmaVersion: 'latest',
       sourceType: 'module',
+      parserOptions: {
+        ecmaFeatures: { jsx: true },
+      },
       globals: {
         console: 'readonly',
         process: 'readonly',
@@ -28,9 +31,25 @@ export default [
         setImmediate: 'readonly',
         Buffer: 'readonly',
         URL: 'readonly',
+        Request: 'readonly',
+        Response: 'readonly',
+        ReadableStream: 'readonly',
+        TextEncoder: 'readonly',
+        EventSource: 'readonly',
+        window: 'readonly',
+        document: 'readonly',
       },
     },
     rules: {
+      'no-unused-vars': [
+        'error',
+        {
+          argsIgnorePattern: '^_',
+          varsIgnorePattern: '^_',
+          destructuredArrayIgnorePattern: '^_',
+          ignoreRestSiblings: true,
+        },
+      ],
       'jsdoc/require-jsdoc': [
         'error',
         {

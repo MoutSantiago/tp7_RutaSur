@@ -2,5 +2,21 @@
   "name": "@rutasur/web",
   "version": "0.1.0",
   "private": true,
-  "description": "Interfaz web de RutaSur (Next.js). Se implementa en un paso posterior."
+  "type": "module",
+  "description": "Interfaz web de RutaSur (Next.js): torre de control, detalle de envío y tracking. Solo lee de MongoDB.",
+  "scripts": {
+    "dev": "next dev -p 3000",
+    "build": "next build",
+    "start": "next start -p 3000"
+  },
+  "dependencies": {
+    "mongodb": "^6.10.0",
+    "next": "^15.1.4",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0"
+  },
+  "devDependencies": {
+    "@types/react": "^19.0.2",
+    "@types/react-dom": "^19.0.2"
+  }
 }
