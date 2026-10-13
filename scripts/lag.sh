@@ -1,9 +1,11 @@
 #!/usr/bin/env bash
-# scripts/lag.sh — Muestra el lag (mensajes pendientes) de cada grupo de
-# consumidores de RutaSur.
+# scripts/lag.sh — Muestra el lag (mensajes pendientes) por grupo de consumidores.
 #
-# Uso: scripts/lag.sh [nombre-del-grupo]
-#   Sin argumentos muestra todos los grupos; con argumento, solo ese grupo.
+# Uso: scripts/lag.sh [grupo]
+#   Sin argumentos: todos los grupos del cluster (proyector, notificaciones,
+#   reprogramacion, monitor-sla, analitica, analitica-tiempos-hub, etc.).
+#   Con argumento: solo ese grupo.
+# Exit 0 siempre; las líneas de detalle van al stdout.
 
 set -euo pipefail
 
@@ -12,16 +14,21 @@ BOOTSTRAP="kafka:29092"
 GRUPO="${1:-}"
 BIN=/opt/kafka/bin/kafka-consumer-groups.sh
 
-echo "== Grupos de consumidores registrados =="
 if [[ -n "$GRUPO" ]]; then
   LISTA="$GRUPO"
 else
-  LISTA=$(docker exec "$CONTENEDOR" "$BIN" --bootstrap-server "$BOOTSTRAP" --list)
+  LISTA=$(docker exec "$CONTENEDOR" "$BIN" --bootstrap-server "$BOOTSTRAP" --list 2>/dev/null)
 fi
 
+total_lag=0
 for g in $LISTA; do
+  echo "=== Grupo: $g"
+  salida=$(docker exec "$CONTENEDOR" "$BIN" --bootstrap-server "$BOOTSTRAP" --group "$g" --describe 2>/dev/null || true)
+  echo "$salida"
+  lag_grupo=$(echo "$salida" | awk 'NR>1 && $6 ~ /^[0-9]+$/ {suma += $6} END {print suma+0}')
+  echo "  -> lag total: $lag_grupo"
+  total_lag=$((total_lag + lag_grupo))
   echo
-  echo "--- Grupo: $g"
-  docker exec "$CONTENEDOR" "$BIN" --bootstrap-server "$BOOTSTRAP" \
-    --group "$g" --describe
 done
+
+echo "== Lag total de todos los grupos: $total_lag"

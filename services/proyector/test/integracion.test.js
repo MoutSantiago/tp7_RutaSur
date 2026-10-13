@@ -25,7 +25,7 @@ const INTEGRACION = process.env.RUTASUR_INTEGRACION === '1';
 
 test(
   'integración: un envío recorre estados por Kafka y queda proyectado en MongoDB descartando duplicados y desorden',
-  { skip: !INTEGRACION ? 'Requiere RUTASUR_INTEGRACION=1 y el entorno Docker levantado' : false, timeout: 60000 },
+  { skip: !INTEGRACION ? 'Requiere RUTASUR_INTEGRACION=1 y el entorno Docker levantado' : false, timeout: 180000 },
   async () => {
     const config = cargarConfiguracion({ servicio: 'proyector-test' });
     const logger = crearLogger({ servicio: 'proyector-test', nivel: 'error' });
@@ -77,15 +77,8 @@ test(
         await aplicacion;
       },
     });
-    // Publicar primero y consumir desde el inicio con grupo nuevo: evita la carrera
-    // de resolución del offset "latest" y hace el test determinista.
-    // Orden publicado: CREADO(1), CLASIFICADO(3), INGRESADO_HUB(2) fuera de orden y
-    // un duplicado del CLASIFICADO(3).
-    await productor.publicar({ topico: TOPICS.ESTADOS, evento: evento(1, 'CREADO') });
-    await productor.publicar({ topico: TOPICS.ESTADOS, evento: evento(3, 'CLASIFICADO', { intento: 1 }) });
-    await productor.publicar({ topico: TOPICS.ESTADOS, evento: evento(2, 'INGRESADO_HUB') });
-    await productor.publicar({ topico: TOPICS.ESTADOS, evento: evento(3, 'CLASIFICADO', { intento: 1 }) });
-
+    // Suscripción primero y publicación después, con una pausa para que el
+    // consumidor resuelva el offset "latest" (evita la carrera de inicio).
     const consumidor = await crearConsumidor({
       brokers: config.kafkaBrokers,
       clientId: 'proyector-test',
@@ -93,14 +86,22 @@ test(
       topicos: [TOPICS.ESTADOS],
       procesador,
       logger,
-      desdeElInicio: true,
+      desdeElInicio: false,
     });
     await consumidor.iniciar();
+    await new Promise((resolver) => setTimeout(resolver, 2500));
 
-    // Esperar al procesamiento (máximo 15 s).
+    // Orden publicado: CREADO(1), CLASIFICADO(3), INGRESADO_HUB(2) fuera de orden
+    // y un duplicado del CLASIFICADO(3).
+    await productor.publicar({ topico: TOPICS.ESTADOS, evento: evento(1, 'CREADO') });
+    await productor.publicar({ topico: TOPICS.ESTADOS, evento: evento(3, 'CLASIFICADO', { intento: 1 }) });
+    await productor.publicar({ topico: TOPICS.ESTADOS, evento: evento(2, 'INGRESADO_HUB') });
+    await productor.publicar({ topico: TOPICS.ESTADOS, evento: evento(3, 'CLASIFICADO', { intento: 1 }) });
+
+    // Esperar al procesamiento (el backlog del topic puede ser grande).
     /** @type {import('../src/reductor.js').DocumentoEnvio | null} */
     let doc = null;
-    const limite = Date.now() + 15000;
+    const limite = Date.now() + 120000;
     while (Date.now() < limite) {
       await new Promise((resolver) => setTimeout(resolver, 500));
       doc = /** @type {import('../src/reductor.js').DocumentoEnvio | null} */ (
@@ -121,6 +122,89 @@ test(
     assert.deepEqual(
       doc.historial.map((h) => h.tipo),
       ['CREADO', 'CLASIFICADO'],
+    );
+  },
+);
+
+test(
+  'integración: un mensaje malformado termina en la DLQ y no detiene el consumo',
+  { skip: !INTEGRACION ? 'Requiere RUTASUR_INTEGRACION=1 y el entorno Docker levantado' : false, timeout: 180000 },
+  async () => {
+    const config = cargarConfiguracion({ servicio: 'proyector-test' });
+    const logger = crearLogger({ servicio: 'proyector-test', nivel: 'error' });
+    const grupo = `proyector-test-${randomUUID()}`;
+    const conexion = await conectarMongo({ uri: config.mongoUri, dbName: config.mongoDb, logger });
+
+    const productor = await crearProductor({
+      brokers: config.kafkaBrokers,
+      clientId: 'proyector-test',
+      logger,
+    });
+
+    /** @type {Array<{clave: string, valor: import('@rutasur/shared/src/eventos/tipos.js').MensajeDlq}>} */
+    const dlqRecibidos = [];
+    /** @type {Array<unknown>} */
+    const validos = [];
+    const procesador = crearProcesadorMensaje({
+      consumidor: grupo,
+      logger,
+      enviarADlq: async ({ clave, valor }) => {
+        dlqRecibidos.push({ clave, valor });
+      },
+      handler: async (evento) => {
+        validos.push(evento);
+      },
+    });
+    const consumidor = await crearConsumidor({
+      brokers: config.kafkaBrokers,
+      clientId: 'proyector-test',
+      grupo,
+      topicos: [TOPICS.ESTADOS],
+      procesador,
+      logger,
+      desdeElInicio: false,
+    });
+    await consumidor.iniciar();
+    // Esperar a que el consumidor resuelva el offset "latest" antes de publicar.
+    await new Promise((resolver) => setTimeout(resolver, 2500));
+
+    // Mensaje malformado (JSON roto) y un evento válido inmediatamente después,
+    // para probar que el consumo continúa.
+    const valido = crearEventoEstado({
+      shipmentId: `ENV-${randomUUID().slice(0, 8).toUpperCase()}`,
+      secuencia: 1,
+      tipo: 'CREADO',
+      hubId: 'HUB-1',
+      zonaId: 'ZONA-SUR',
+      repartidorId: 'REP-1',
+    });
+    await productor.publicarCrudo({
+      topico: TOPICS.ESTADOS,
+      clave: 'ENV-TEST-DLQ',
+      valor: '{"eventId":"roto","tipo":"CREADO"',
+    });
+    await productor.publicar({ topico: TOPICS.ESTADOS, evento: valido });
+
+    const limite = Date.now() + 120000;
+    while (Date.now() < limite && (dlqRecibidos.length === 0 || validos.length === 0)) {
+      await new Promise((resolver) => setTimeout(resolver, 300));
+    }
+
+    await consumidor.detener();
+    await productor.cerrar();
+    await conexion.cerrar();
+
+    const mios = dlqRecibidos.filter((m) =>
+      String(m.valor.eventoOriginal).includes('"eventId":"roto"'),
+    );
+    assert.equal(mios.length, 1, 'exactamente un mensaje malformado en la DLQ para este test');
+    const mensaje = mios[0].valor;
+    assert.match(mensaje.motivoError, /JSON inválido/);
+    assert.equal(mensaje.topicOrigen, TOPICS.ESTADOS);
+    assert.equal(mensaje.consumidor, grupo);
+    // y el evento válido posterior fue procesado (el consumo no se detuvo)
+    assert.ok(
+      validos.some((v) => /** @type {{eventId?: string}} */ (v).eventId === valido.eventId),
     );
   },
 );

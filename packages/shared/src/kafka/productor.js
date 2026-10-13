@@ -46,9 +46,12 @@ export async function crearProductor({ brokers, clientId, logger, kafka }) {
    * @returns {Promise<void>} Resuelve cuando Kafka confirmó el envío.
    */
   async function publicarCrudo({ topico, clave, valor }) {
+    // Las strings viajan crudas (son el mecanismo de mensajes malformados de la
+    // DLQ y el plan de defectos del simulador); los objetos se serializan.
+    const texto = typeof valor === 'string' ? valor : JSON.stringify(valor);
     await productorKafka.send({
       topic: topico,
-      messages: [{ key: clave, value: JSON.stringify(valor) }],
+      messages: [{ key: clave, value: texto }],
     });
     logger.debug('Evento publicado', { topico, clave });
   }

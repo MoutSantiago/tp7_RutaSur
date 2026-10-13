@@ -314,6 +314,43 @@ Estructura:
   aplican los cambios SSE (EventSource reconecta solo).
 - Estilos CSS a mano (`app/globals.css`); sin librerías de UI.
 
+## Requisitos no funcionales
+
+Todos los consumidores comparten el mismo comportamiento (en `packages/shared/kafka/consumidor.js`):
+**commit de offset manual solo después de escribir en MongoDB**, idempotencia por
+`eventos_procesados`, mensajes inválidos a la DLQ con motivo, logs estructurados con
+`eventId`/`particion`/`offset`, y apagado ordenado vía `registrarApagadoOrdenado`
+(SIGTERM/SIGINT: consumidor → productores → Mongo). KafkaJS/MongoDriver reconectan solos;
+el SSE de la web cierra sus change streams al desconectar el cliente.
+
+| NF | Evidencia / cómo verificarlo |
+| :--- | :--- |
+| Latencia evento→pantalla < 2 s | Torre conectada a `/api/stream` mientras corre la demo |
+| Recuperación sin pérdida ni duplicados | `./scripts/demo-caida.sh` (detiene notificaciones, muestra el lag creciendo, lo reinicia y verifica 0 duplicados) |
+| Reconstrucción determinista de `envios` | `node scripts/rebuild-envios.js` y test de integración correspondiente |
+| Aislamiento (un servicio caído no frena a los demás) | mismo script de demo: torre y reprogramación siguen funcionando |
+| Observabilidad | `./scripts/lag.sh [grupo]` (lag por partición y total por grupo) |
+| Replay del 4.º indicador | `node scripts/replay-tiempos-hub.js` |
+| Arranque con un solo comando | `npm run up` (infra) + `npm start -w services/<svc>` por servicio |
+
+### Demo de caída de un servicio
+
+```bash
+./scripts/demo-caida.sh 5    # detiene notificaciones, genera 5 fallos por AUSENTE,
+                             # muestra el lag, reinicia y cuenta duplicados (debe dar 0)
+```
+
+### Tests de integración
+
+Corren solo con el entorno levantado:
+
+```bash
+RUTASUR_INTEGRACION=1 npm test -w services/proyector -w services/monitor-sla
+```
+
+Cubre extremo a extremo: duplicado, fuera de orden, malformado→DLQ con consumo que
+sigue, reconstrucción idéntica de `envios` y reinicio del monitor sin alertas repetidas.
+
 ## Convenciones
 
 - **Arquitectura:** Kafka es el único punto de contacto entre servicios; MongoDB
